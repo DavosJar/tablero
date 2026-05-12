@@ -8,12 +8,13 @@ RUN npm run build
 
 # Stage 2: Build backend
 FROM golang:1.26-alpine AS backend-builder
+RUN apk add --no-cache gcc musl-dev
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o tablero .
+RUN CGO_ENABLED=1 GOOS=linux go build -o tablero .
 
 # Stage 3: Runtime
 FROM alpine:latest
