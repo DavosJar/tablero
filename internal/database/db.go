@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"os"
 	"tablero/internal/models"
 
@@ -9,17 +10,39 @@ import (
 	"gorm.io/gorm"
 )
 
+func getPostgresDSN() string {
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		return dsn
+	}
+
+	host := os.Getenv("DB_HOST")
+	port := os.Getenv("DB_PORT")
+	user := os.Getenv("DB_USER")
+	pass := os.Getenv("DB_PASSWORD")
+	name := os.Getenv("DB_NAME")
+
+	if host == "" || user == "" || name == "" {
+		return ""
+	}
+	if port == "" {
+		port = "5432"
+	}
+
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
+		host, port, user, pass, name)
+}
+
 func InitDB() (*gorm.DB, error) {
-	databaseURL := os.Getenv("DATABASE_URL")
+	dsn := getPostgresDSN()
 
 	var db *gorm.DB
 	var err error
 
-	if databaseURL != "" {
-		// PostgreSQL
-		db, err = gorm.Open(postgres.Open(databaseURL), &gorm.Config{})
+	if dsn != "" {
+		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	} else if os.Getenv("APP_ENV") == "production" {
+		return nil, fmt.Errorf("no database configured: set DATABASE_URL or DB_HOST/DB_USER/DB_PASSWORD/DB_NAME")
 	} else {
-		// SQLite
 		db, err = gorm.Open(sqlite.Open("data.db"), &gorm.Config{})
 	}
 
@@ -27,10 +50,7 @@ func InitDB() (*gorm.DB, error) {
 		return nil, err
 	}
 
-	// Auto-migrate
 	db.AutoMigrate(&models.Column{}, &models.Task{})
-
-	// Crear columnas por defecto
 	createDefaultColumns(db)
 
 	return db, nil
@@ -44,7 +64,6 @@ func createDefaultColumns(db *gorm.DB) error {
 	}
 
 	for _, col := range defaultColumns {
-		// Check if column already exists
 		var count int64
 		db.Model(&models.Column{}).Where("name = ?", col.Name).Count(&count)
 		if count == 0 {

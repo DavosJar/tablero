@@ -5,7 +5,7 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="Kanban Board - Login">
   <main id="app">
     <div class="login-container">
-      <form class="login-form" id="login-form" onsubmit="handleLogin(event)">
+      <form class="login-form" id="login-form" method="POST" action="/api/login">
         <h1>Tablero Kanban</h1>
         <div class="form-group">
           <label for="password">Contraseña</label>
@@ -23,17 +23,29 @@ import Layout from '../layouts/Layout.astro';
       </form>
     </div>
 
-    <!-- Kanban Board Modal (hidden initially) -->
     <div id="kanban-container" style="display: none;"></div>
 
-    <!-- Modal for adding tasks -->
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="modal">
+      <div class="modal-content" style="max-width: 320px;">
+        <div class="modal-header">
+          <h2 id="confirm-title">Confirmar</h2>
+        </div>
+        <p id="confirm-message" style="margin: 15px 0; color: #555;"></p>
+        <div class="modal-buttons" style="justify-content: center;">
+          <button type="button" class="btn btn-secondary" id="confirm-cancel-btn">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="confirm-ok-btn" style="background: #e74c3c;">Eliminar</button>
+        </div>
+      </div>
+    </div>
+
     <div id="task-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
           <h2 id="modal-title">Agregar Tarea</h2>
-          <button type="button" class="close-btn" onclick="closeTaskModal()">&times;</button>
+          <button type="button" class="close-btn" id="close-modal-btn">&times;</button>
         </div>
-        <form id="task-form" onsubmit="submitTask(event)">
+        <form id="task-form">
           <div class="form-group">
             <label for="task-title">Título</label>
             <input type="text" id="task-title" required placeholder="Título de la tarea" />
@@ -55,7 +67,7 @@ import Layout from '../layouts/Layout.astro';
             <input type="date" id="task-due-date" />
           </div>
           <div class="modal-buttons">
-            <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">Cancelar</button>
+            <button type="button" class="btn btn-secondary" id="cancel-task-btn">Cancelar</button>
             <button type="submit" class="btn btn-primary">Guardar</button>
           </div>
         </form>
@@ -63,279 +75,10 @@ import Layout from '../layouts/Layout.astro';
     </div>
   </main>
 
-  <script>
+  <script is:inline>
     let token = null;
     let currentColumnId = null;
     let editingTaskId = null;
-
-    // Check if already logged in
-    document.addEventListener('DOMContentLoaded', () => {
-      const storedToken = localStorage.getItem('kanban_token');
-      if (storedToken) {
-        token = storedToken;
-        showKanban();
-      }
-    });
-
-    async function handleLogin(event) {
-      event.preventDefault();
-      const password = document.getElementById('password').value;
-      const errorEl = document.getElementById('error-message');
-
-      try {
-        const response = await fetch('/api/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ password }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          token = data.token;
-          localStorage.setItem('kanban_token', token);
-          errorEl.style.display = 'none';
-          document.getElementById('login-form').reset();
-          showKanban();
-        } else {
-          errorEl.textContent = 'Contraseña incorrecta';
-          errorEl.style.display = 'block';
-        }
-      } catch (error) {
-        errorEl.textContent = 'Error de conexión';
-        errorEl.style.display = 'block';
-      }
-    }
-
-    async function showKanban() {
-      document.querySelector('.login-container').style.display = 'none';
-      document.getElementById('kanban-container').style.display = 'block';
-
-      // Load kanban board
-      await loadColumns();
-    }
-
-    async function loadColumns() {
-      try {
-        const response = await fetch('/api/columns', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const columns = await response.json();
-          renderKanban(columns);
-        } else if (response.status === 401) {
-          logout();
-        }
-      } catch (error) {
-        console.error('Error loading columns:', error);
-      }
-    }
-
-    function renderKanban(columns) {
-      const container = document.getElementById('kanban-container');
-      
-      let html = `
-        <div class="kanban-board">
-          <div class="kanban-header">
-            <h1>Mi Tablero Kanban</h1>
-            <button class="logout-btn" onclick="logout()">Cerrar sesión</button>
-          </div>
-          <div class="kanban-container">
-      `;
-
-      columns.forEach(column => {
-        html += `
-          <div class="column" data-column-id="${column.id}">
-            <div class="column-header">
-              <h2>${column.name}</h2>
-              <span class="task-count">${column.tasks ? column.tasks.length : 0}</span>
-            </div>
-            <div class="tasks-list" data-column-id="${column.id}">
-        `;
-
-        if (column.tasks && column.tasks.length > 0) {
-          column.tasks.forEach(task => {
-            const priorityColor = {
-              'baja': '#90EE90',
-              'media': '#FFD700',
-              'alta': '#FF6B6B'
-            };
-            const dueDate = task.due_date ? new Date(task.due_date).toLocaleDateString('es-ES') : null;
-            
-            html += `
-              <div class="card" data-task-id="${task.id}">
-                <div class="card-header">
-                  <h3>${task.title}</h3>
-                  <button class="delete-btn" onclick="deleteTask(${task.id})" type="button">&times;</button>
-                </div>
-                ${task.description ? `<p class="description">${task.description}</p>` : ''}
-                <div class="card-footer">
-                  ${task.priority ? `<span class="priority" style="background-color: ${priorityColor[task.priority] || '#ccc'}">${task.priority}</span>` : ''}
-                  ${dueDate ? `<span class="due-date">${dueDate}</span>` : ''}
-                </div>
-              </div>
-            `;
-          });
-        }
-
-        html += `
-            </div>
-            <button class="add-task-btn" onclick="openAddTaskModal(${column.id})" type="button">+ Agregar tarea</button>
-          </div>
-        `;
-      });
-
-      html += `
-          </div>
-        </div>
-      `;
-
-      container.innerHTML = html;
-      initSortable();
-    }
-
-    function initSortable() {
-      const taskLists = document.querySelectorAll('.tasks-list');
-      
-      // Dynamically import Sortable (fallback to vanilla drag-drop if not available)
-      taskLists.forEach(list => {
-        // Enable native drag and drop
-        list.addEventListener('dragover', (e) => {
-          e.preventDefault();
-          e.dropEffect = 'move';
-          list.style.backgroundColor = 'rgba(0,0,0,0.05)';
-        });
-
-        list.addEventListener('dragleave', () => {
-          list.style.backgroundColor = '';
-        });
-
-        list.addEventListener('drop', async (e) => {
-          e.preventDefault();
-          list.style.backgroundColor = '';
-          
-          const taskId = e.dataTransfer.getData('text/plain');
-          const columnId = list.getAttribute('data-column-id');
-          
-          if (taskId && columnId) {
-            await updateTask(parseInt(taskId), { column_id: parseInt(columnId) });
-          }
-        });
-      });
-
-      const cards = document.querySelectorAll('.card');
-      cards.forEach(card => {
-        card.draggable = true;
-        card.addEventListener('dragstart', (e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', card.getAttribute('data-task-id'));
-          card.style.opacity = '0.5';
-        });
-
-        card.addEventListener('dragend', () => {
-          card.style.opacity = '';
-        });
-      });
-    }
-
-    function openAddTaskModal(columnId) {
-      currentColumnId = columnId;
-      editingTaskId = null;
-      document.getElementById('modal-title').textContent = 'Agregar Tarea';
-      document.getElementById('task-form').reset();
-      document.getElementById('task-modal').classList.add('active');
-    }
-
-    function closeTaskModal() {
-      document.getElementById('task-modal').classList.remove('active');
-      currentColumnId = null;
-      editingTaskId = null;
-    }
-
-    async function submitTask(event) {
-      event.preventDefault();
-
-      const title = document.getElementById('task-title').value;
-      const description = document.getElementById('task-description').value;
-      const priority = document.getElementById('task-priority').value;
-      const dueDate = document.getElementById('task-due-date').value;
-
-      const taskData = {
-        title,
-        description,
-        priority,
-        due_date: dueDate || null,
-        column_id: currentColumnId,
-      };
-
-      try {
-        const url = editingTaskId ? `/api/tasks/${editingTaskId}` : '/api/tasks';
-        const method = editingTaskId ? 'PUT' : 'POST';
-
-        const response = await fetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(taskData),
-        });
-
-        if (response.ok) {
-          closeTaskModal();
-          await loadColumns();
-        } else {
-          alert('Error al guardar la tarea');
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        alert('Error de conexión');
-      }
-    }
-
-    async function deleteTask(taskId) {
-      if (confirm('¿Estás seguro de que quieres eliminar esta tarea?')) {
-        try {
-          const response = await fetch(`/api/tasks/${taskId}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-
-          if (response.ok) {
-            await loadColumns();
-          } else {
-            alert('Error al eliminar la tarea');
-          }
-        } catch (error) {
-          console.error('Error:', error);
-        }
-      }
-    }
-
-    async function updateTask(taskId, updates) {
-      try {
-        const response = await fetch(`/api/tasks/${taskId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(updates),
-        });
-
-        if (response.ok) {
-          await loadColumns();
-        }
-      } catch (error) {
-        console.error('Error:', error);
-      }
-    }
 
     function logout() {
       localStorage.removeItem('kanban_token');
@@ -344,5 +87,204 @@ import Layout from '../layouts/Layout.astro';
       document.getElementById('kanban-container').style.display = 'none';
       document.getElementById('login-form').reset();
     }
+
+    async function updateTask(taskId, updates) {
+      try {
+        const response = await fetch('/api/tasks/' + taskId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(updates),
+        });
+        if (response.ok) await loadColumns();
+      } catch (e) { console.error(e); }
+    }
+
+    function confirmAction(message, onConfirm) {
+      document.getElementById('confirm-cancel-btn').style.display = '';
+      document.getElementById('confirm-message').textContent = message;
+      document.getElementById('confirm-modal').classList.add('active');
+      document.getElementById('confirm-ok-btn').onclick = function() {
+        document.getElementById('confirm-modal').classList.remove('active');
+        onConfirm();
+      };
+      document.getElementById('confirm-cancel-btn').onclick = function() {
+        document.getElementById('confirm-modal').classList.remove('active');
+      };
+    }
+
+    function deleteTask(taskId) {
+      confirmAction('Eliminar tarea?', async function() {
+        try {
+          const response = await fetch('/api/tasks/' + taskId, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + token },
+          });
+          if (response.ok) await loadColumns();
+        } catch (e) { console.error(e); }
+      });
+    }
+
+    function closeTaskModal() {
+      document.getElementById('task-modal').classList.remove('active');
+      currentColumnId = null;
+      editingTaskId = null;
+    }
+
+    function openAddTaskModal(columnId) {
+      document.getElementById('task-form').querySelector('button[type="submit"]').textContent = 'Guardar';
+      currentColumnId = columnId;
+      editingTaskId = null;
+      document.getElementById('modal-title').textContent = 'Agregar Tarea';
+      document.getElementById('task-form').reset();
+      document.getElementById('task-modal').classList.add('active');
+    }
+
+    async function submitTask(event) {
+      event.preventDefault();
+      const title = document.getElementById('task-title').value;
+      const description = document.getElementById('task-description').value;
+      const priority = document.getElementById('task-priority').value;
+      const dueDate = document.getElementById('task-due-date').value;
+      const data = { title, description, priority, due_date: dueDate || null, column_id: currentColumnId };
+      const url = editingTaskId ? '/api/tasks/' + editingTaskId : '/api/tasks';
+      const method = editingTaskId ? 'PUT' : 'POST';
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(data),
+        });
+        if (response.ok) { closeTaskModal(); document.getElementById('task-form').querySelector('button[type="submit"]').textContent = 'Guardar'; await loadColumns(); }
+        else showError('Error al guardar la tarea');
+      } catch (e) { console.error(e); showError('Error al guardar la tarea'); }
+    }
+
+    function showError(msg) {
+      document.getElementById('confirm-title').textContent = 'Error';
+      document.getElementById('confirm-message').textContent = msg;
+      document.getElementById('confirm-cancel-btn').style.display = 'none';
+      document.getElementById('confirm-ok-btn').textContent = 'OK';
+      document.getElementById('confirm-ok-btn').style.background = '#667eea';
+      document.getElementById('confirm-ok-btn').onclick = function() {
+        document.getElementById('confirm-modal').classList.remove('active');
+        document.getElementById('confirm-cancel-btn').style.display = '';
+        document.getElementById('confirm-ok-btn').textContent = 'Eliminar';
+        document.getElementById('confirm-ok-btn').style.background = '#e74c3c';
+      };
+      document.getElementById('confirm-modal').classList.add('active');
+    }
+
+    async function loadColumns() {
+      try {
+        const response = await fetch('/api/columns', {
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+        if (response.ok) renderKanban(await response.json());
+        else if (response.status === 401) logout();
+      } catch (e) { console.error(e); }
+    }
+
+    function renderKanban(columns) {
+      const colors = { baja: '#90EE90', media: '#FFD700', alta: '#FF6B6B' };
+      let html = '<div class="kanban-board"><div class="kanban-header"><h1>Mi Tablero Kanban</h1><button class="logout-btn" id="logout-btn">Cerrar sesi\u00f3n</button></div><div class="kanban-container">';
+      columns.forEach(col => {
+        html += '<div class="column" data-column-id="' + col.id + '"><div class="column-header"><h2>' + col.name + '</h2><span class="task-count">' + (col.tasks ? col.tasks.length : 0) + '</span></div><div class="tasks-list" data-column-id="' + col.id + '">';
+        if (col.tasks) col.tasks.forEach(task => {
+          const dueStr = task.due_date ? task.due_date.substring(0,10) : '';
+          const date = dueStr ? new Date(dueStr + 'T12:00:00').toLocaleDateString('es-ES') : null;
+          html += '<div class="card" draggable="true" data-task-id="' + task.id + '" data-description="' + (task.description || '') + '" data-priority="' + (task.priority || 'media') + '" data-due-date="' + dueStr + '"><div class="card-header"><h3>' + task.title + '</h3><button class="delete-btn" data-task-id="' + task.id + '" type="button">&times;</button></div>' + (task.description ? '<p class="description">' + task.description + '</p>' : '') + '<div class="card-footer">' + (task.priority ? '<span class="priority" style="background-color:' + (colors[task.priority] || '#ccc') + '">' + task.priority + '</span>' : '') + (date ? '<span class="due-date">' + date + '</span>' : '') + '</div></div>';
+        });
+        html += '</div><button class="add-task-btn" data-column-id="' + col.id + '" type="button">+ Agregar tarea</button></div>';
+      });
+      html += '</div></div>';
+      document.getElementById('kanban-container').innerHTML = html;
+      attachEvents();
+    }
+
+    function attachEvents() {
+      document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', function() { deleteTask(parseInt(this.dataset.taskId)); });
+      });
+      document.querySelectorAll('.add-task-btn').forEach(btn => {
+        btn.addEventListener('click', function() { openAddTaskModal(parseInt(this.dataset.columnId)); });
+      });
+      document.querySelectorAll('.card').forEach(card => {
+        card.addEventListener('dragstart', function(e) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', this.dataset.taskId);
+          this.style.opacity = '0.5';
+        });
+        card.addEventListener('dragend', function() { this.style.opacity = ''; });
+      });
+      // Click para editar tarea
+      document.querySelectorAll('.card').forEach(function(card) {
+        card.addEventListener('click', function(e) {
+          if (e.target.classList.contains('delete-btn')) return;
+          editingTaskId = parseInt(this.dataset.taskId);
+          document.getElementById('modal-title').textContent = 'Editar Tarea';
+          document.getElementById('task-title').value = this.querySelector('h3').textContent;
+          document.getElementById('task-description').value = this.dataset.description || '';
+          document.getElementById('task-priority').value = this.dataset.priority || 'media';
+          document.getElementById('task-due-date').value = this.dataset.dueDate || '';
+          document.getElementById('task-form').querySelector('button[type="submit"]').textContent = 'Guardar cambios';
+          document.getElementById('task-modal').classList.add('active');
+        });
+      });
+      document.querySelectorAll('.tasks-list').forEach(list => {
+        list.addEventListener('dragover', function(e) { e.preventDefault(); e.dropEffect = 'move'; this.style.backgroundColor = 'rgba(0,0,0,0.05)'; });
+        list.addEventListener('dragleave', function() { this.style.backgroundColor = ''; });
+        list.addEventListener('drop', async function(e) {
+          e.preventDefault();
+          this.style.backgroundColor = '';
+          const taskId = e.dataTransfer.getData('text/plain');
+          const columnId = this.dataset.columnId;
+          if (taskId && columnId) await updateTask(parseInt(taskId), { column_id: parseInt(columnId) });
+        });
+      });
+      document.getElementById('logout-btn').addEventListener('click', logout);
+    }
+
+    async function showKanban() {
+      document.querySelector('.login-container').style.display = 'none';
+      document.getElementById('kanban-container').style.display = 'block';
+      await loadColumns();
+    }
+
+    // Initialization - runs when script loads (at bottom of body, DOM ready)
+    (function() {
+      var stored = localStorage.getItem('kanban_token');
+      if (stored) { token = stored; showKanban(); }
+
+      document.getElementById('login-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        var pw = document.getElementById('password').value;
+        var err = document.getElementById('error-message');
+        try {
+          var response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pw }),
+          });
+          if (response.ok) {
+            var data = await response.json();
+            token = data.token;
+            localStorage.setItem('kanban_token', token);
+            err.style.display = 'none';
+            document.getElementById('login-form').reset();
+            showKanban();
+          } else {
+            err.textContent = 'Contrase\u00f1a incorrecta';
+            err.style.display = 'block';
+          }
+        } catch (e) {
+          err.textContent = 'Error de conexi\u00f3n';
+          err.style.display = 'block';
+        }
+      });
+
+      document.getElementById('task-form').addEventListener('submit', submitTask);
+      document.getElementById('close-modal-btn').addEventListener('click', closeTaskModal);
+      document.getElementById('cancel-task-btn').addEventListener('click', closeTaskModal);
+    })();
   </script>
 </Layout>

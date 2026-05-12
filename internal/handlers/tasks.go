@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"time"
 	"tablero/internal/models"
 
 	"github.com/gin-gonic/gin"
@@ -8,20 +9,31 @@ import (
 )
 
 type CreateTaskRequest struct {
-	Title       string `json:"title" binding:"required"`
-	Description string `json:"description"`
-	Priority    string `json:"priority"`
+	Title       string  `json:"title" binding:"required"`
+	Description string  `json:"description"`
+	Priority    string  `json:"priority"`
 	DueDate     *string `json:"due_date"`
-	ColumnID    uint   `json:"column_id" binding:"required"`
+	ColumnID    uint    `json:"column_id" binding:"required"`
 }
 
 type UpdateTaskRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Priority    string `json:"priority"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Priority    string  `json:"priority"`
 	DueDate     *string `json:"due_date"`
-	ColumnID    uint   `json:"column_id"`
-	Order       int    `json:"order"`
+	ColumnID    uint    `json:"column_id"`
+	Order       int     `json:"order"`
+}
+
+func parseDate(s *string) *time.Time {
+	if s == nil || *s == "" {
+		return nil
+	}
+	t, err := time.Parse("2006-01-02", (*s)[:10])
+	if err != nil {
+		return nil
+	}
+	return &t
 }
 
 func GetTasks(db *gorm.DB) gin.HandlerFunc {
@@ -43,7 +55,6 @@ func CreateTask(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Validate column exists
 		var column models.Column
 		if err := db.First(&column, req.ColumnID).Error; err != nil {
 			c.JSON(400, gin.H{"error": "column not found"})
@@ -55,6 +66,7 @@ func CreateTask(db *gorm.DB) gin.HandlerFunc {
 			Description: req.Description,
 			Priority:    req.Priority,
 			ColumnID:    req.ColumnID,
+			DueDate:     parseDate(req.DueDate),
 		}
 
 		if err := db.Create(&task).Error; err != nil {
@@ -81,7 +93,6 @@ func UpdateTask(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Update fields
 		if req.Title != "" {
 			task.Title = req.Title
 		}
@@ -92,7 +103,6 @@ func UpdateTask(db *gorm.DB) gin.HandlerFunc {
 			task.Priority = req.Priority
 		}
 		if req.ColumnID != 0 {
-			// Validate column exists
 			var column models.Column
 			if err := db.First(&column, req.ColumnID).Error; err != nil {
 				c.JSON(400, gin.H{"error": "column not found"})
@@ -102,6 +112,10 @@ func UpdateTask(db *gorm.DB) gin.HandlerFunc {
 		}
 		if req.Order != 0 {
 			task.Order = req.Order
+		}
+		// Handle due_date: if key present in JSON (even null), update it
+		if req.DueDate != nil {
+			task.DueDate = parseDate(req.DueDate)
 		}
 
 		if err := db.Save(&task).Error; err != nil {
