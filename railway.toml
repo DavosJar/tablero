@@ -1,0 +1,12 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "./tablero"
+restartPolicyMaxRetries = 5
+
+[env]
+APP_PASSWORD = "${{ secrets.APP_PASSWORD }}"
+JWT_SECRET = "${{ secrets.JWT_SECRET }}"
+PORT = "8080"

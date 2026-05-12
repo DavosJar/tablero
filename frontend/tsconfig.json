@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "jsxImportSource": "astro",
+    "allowJs": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2020"
+  }
+}

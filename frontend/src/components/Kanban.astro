@@ -1,0 +1,87 @@
+---
+import Column from './Column.astro';
+
+interface Task {
+  id: number;
+  title: string;
+  description?: string;
+  priority?: string;
+  due_date?: string;
+  column_id: number;
+}
+
+interface ColumnData {
+  id: number;
+  name: string;
+  tasks: Task[];
+}
+
+interface Props {
+  columns: ColumnData[];
+}
+
+const { columns = [] } = Astro.props;
+---
+
+<div class="kanban-board">
+  <div class="kanban-header">
+    <h1>Mi Tablero Kanban</h1>
+    <button class="logout-btn" onclick="logout()">Cerrar sesión</button>
+  </div>
+  <div class="kanban-container">
+    {columns.map((column) => (
+      <Column 
+        id={column.id}
+        name={column.name}
+        tasks={column.tasks}
+      />
+    ))}
+  </div>
+</div>
+
+<style>
+  .kanban-board {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .kanban-header {
+    background: #2c3e50;
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .kanban-header h1 {
+    margin: 0;
+    font-size: 28px;
+  }
+
+  .logout-btn {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+  }
+
+  .logout-btn:hover {
+    background: #c0392b;
+  }
+
+  .kanban-container {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    overflow-x: auto;
+    flex: 1;
+  }
+</style>

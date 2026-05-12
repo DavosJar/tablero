@@ -1,0 +1,102 @@
+---
+import Card from './Card.astro';
+
+interface Task {
+  id: number;
+  title: string;
+  description?: string;
+  priority?: string;
+  due_date?: string;
+}
+
+interface Props {
+  id: number;
+  name: string;
+  tasks?: Task[];
+}
+
+const { id, name, tasks = [] } = Astro.props;
+---
+
+<div class="column" data-column-id={id}>
+  <div class="column-header">
+    <h2>{name}</h2>
+    <span class="task-count">{tasks.length}</span>
+  </div>
+  <div class="tasks-list" data-column-id={id}>
+    {tasks.map((task) => (
+      <Card 
+        id={task.id}
+        title={task.title}
+        description={task.description}
+        priority={task.priority}
+        dueDate={task.due_date}
+      />
+    ))}
+  </div>
+  <button class="add-task-btn" onclick="addTaskToColumn(event)">+ Agregar tarea</button>
+</div>
+
+<style>
+  .column {
+    background: #f5f5f5;
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 500px;
+    flex: 1;
+    min-width: 300px;
+  }
+
+  .column-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #ddd;
+  }
+
+  .column-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #333;
+  }
+
+  .task-count {
+    background: #007bff;
+    color: white;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  .tasks-list {
+    min-height: 300px;
+    padding: 8px 0;
+  }
+
+  .tasks-list.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-style: italic;
+  }
+
+  .add-task-btn {
+    width: 100%;
+    padding: 10px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .add-task-btn:hover {
+    background: #0056b3;
+  }
+</style>

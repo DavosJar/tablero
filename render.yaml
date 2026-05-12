@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: tablero
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: APP_PASSWORD
+        scope: run
+        sync: false
+      - key: JWT_SECRET
+        scope: run
+        sync: false
+      - key: PORT
+        value: "8080"
+    databases:
+      - name: postgres
+        plan: free

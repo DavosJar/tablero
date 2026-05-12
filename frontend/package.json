@@ -1,0 +1,17 @@
+{
+  "name": "kanban-frontend",
+  "version": "1.0.0",
+  "description": "Kanban board frontend with Astro",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "^4.2.0"
+  },
+  "devDependencies": {
+    "sortablejs": "^1.15.0"
+  }
+}

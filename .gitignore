@@ -1,0 +1,8 @@
+.gomcp/
+data.db
+.env
+node_modules/
+frontend/dist/
+tablero
+dist/
+.DS_Store
