@@ -2,8 +2,7 @@ package main
 
 import (
 	"embed"
-	"io"
-	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -40,6 +39,21 @@ func getContentType(path string) string {
 	return "text/plain; charset=utf-8"
 }
 
+// readDistFile reads a file from frontend/dist/. In development reads from disk,
+// in production reads from the embedded filesystem.
+func readDistFile(path string) ([]byte, error) {
+	if _, err := os.Stat("frontend/dist"); err == nil {
+		log.Printf("readDistFile: reading from disk: frontend/dist/%s", path)
+		return os.ReadFile("frontend/dist/" + path)
+	}
+	log.Printf("readDistFile: reading from embed: %s", path)
+	data, err := frontendFS.ReadFile(path)
+	if err != nil {
+		log.Printf("readDistFile: ERROR reading from embed: %v", err)
+	}
+	return data, err
+}
+
 func main() {
 	db, err := database.InitDB()
 	if err != nil {
@@ -49,6 +63,23 @@ func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
+	}
+
+	// Debug: list embedded FS contents
+	entries, err := frontendFS.ReadDir(".")
+	if err != nil {
+		log.Printf("DEBUG embed: error reading root: %v", err)
+	} else {
+		log.Printf("DEBUG embed: root entries:")
+		for _, e := range entries {
+			log.Printf("  - %s (dir=%v)", e.Name(), e.IsDir())
+			if e.IsDir() {
+				subs, _ := frontendFS.ReadDir(e.Name())
+				for _, s := range subs {
+					log.Printf("    - %s/%s", e.Name(), s.Name())
+				}
+			}
+		}
 	}
 
 	router := gin.Default()
@@ -73,19 +104,14 @@ func main() {
 	protectedGroup.PUT("/tasks/:id", handlers.UpdateTask(db))
 	protectedGroup.DELETE("/tasks/:id", handlers.DeleteTask(db))
 
-	// Use DirFS in development (disk), embedded FS in production (Docker)
-	var distFS fs.FS
-	if _, err := os.Stat("frontend/dist"); err == nil {
-		// Development: read from disk
-		distFS = os.DirFS("frontend/dist")
-	} else {
-		// Production: use embedded FS
-		distFS, _ = fs.Sub(frontendFS, "frontend/dist")
-	}
-
-	// Root
+	// Root - serve index.html
 	router.GET("/", func(c *gin.Context) {
-		http.FileServer(http.FS(distFS)).ServeHTTP(c.Writer, c.Request)
+		data, err := readDistFile("index.html")
+		if err != nil {
+			c.String(http.StatusNotFound, "not found")
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 	})
 
 	// NoRoute: static files + SPA fallback
@@ -98,25 +124,23 @@ func main() {
 		}
 
 		// Try static file
-		f, err := distFS.Open(strings.TrimPrefix(path, "/"))
-		if err == nil {
-			defer f.Close()
-			stat, _ := f.Stat()
-			if !stat.IsDir() {
-				http.ServeContent(c.Writer, c.Request, path, stat.ModTime(), f.(io.ReadSeeker))
+		filePath := strings.TrimPrefix(path, "/")
+		if filePath != "" {
+			data, err := readDistFile(filePath)
+			if err == nil {
+				c.Data(http.StatusOK, getContentType(path), data)
 				return
 			}
+			log.Printf("NoRoute: readDistFile(%q) failed: %v", filePath, err)
 		}
 
 		// SPA fallback
-		f, err = distFS.Open("index.html")
+		data, err := readDistFile("index.html")
 		if err != nil {
 			c.Status(http.StatusNotFound)
 			return
 		}
-		defer f.Close()
-		stat, _ := f.Stat()
-		http.ServeContent(c.Writer, c.Request, "index.html", stat.ModTime(), f.(io.ReadSeeker))
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 	})
 
 	if err := router.Run(":" + port); err != nil {

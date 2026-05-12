@@ -6,7 +6,6 @@ import (
 	"tablero/internal/models"
 
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -34,18 +33,11 @@ func getPostgresDSN() string {
 
 func InitDB() (*gorm.DB, error) {
 	dsn := getPostgresDSN()
-
-	var db *gorm.DB
-	var err error
-
-	if dsn != "" {
-		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	} else if os.Getenv("APP_ENV") == "production" {
-		return nil, fmt.Errorf("no database configured: set DATABASE_URL or DB_HOST/DB_USER/DB_PASSWORD/DB_NAME")
-	} else {
-		db, err = gorm.Open(sqlite.Open("data.db"), &gorm.Config{})
+	if dsn == "" {
+		return nil, fmt.Errorf("DATABASE_URL or DB_HOST/DB_USER/DB_PASSWORD/DB_NAME is required")
 	}
 
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
