@@ -19,6 +19,7 @@ func getPostgresDSN() string {
 	user := os.Getenv("DB_USER")
 	pass := os.Getenv("DB_PASSWORD")
 	name := os.Getenv("DB_NAME")
+	sslmode := os.Getenv("DB_SSLMODE")
 
 	if host == "" || user == "" || name == "" {
 		return ""
@@ -26,9 +27,12 @@ func getPostgresDSN() string {
 	if port == "" {
 		port = "5432"
 	}
+	if sslmode == "" {
+		sslmode = "disable"
+	}
 
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		host, port, user, pass, name)
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		host, port, user, pass, name, sslmode)
 }
 
 func InitDB() (*gorm.DB, error) {
